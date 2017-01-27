@@ -15,7 +15,7 @@ Suggestions and pull requests are welcome.
 To install the exif extraction cli tool, in a terminal type:
 
 ```
-go install github.com/xor-gate/goexif2/cmd/goexif2
+go install github.com/BrianBland/goexif2/cmd/goexif2
 goexif2 <file>.jpg
 ```
 
@@ -23,8 +23,8 @@ Functionality is split into two packages - "exif" and "tiff"
 The exif package depends on the tiff package.
 
 ```
-go get github.com/xor-gate/goexif2/exif
-go get github.com/xor-gate/goexif2/tiff
+go get github.com/BrianBland/goexif2/exif
+go get github.com/BrianBland/goexif2/tiff
 ```
 
 ## Example
@@ -37,8 +37,8 @@ import (
 	"log"
 	"os"
 
-	"github.com/xor-gate/goexif2/exif"
-	"github.com/xor-gate/goexif2/mknote"
+	"github.com/BrianBland/goexif2/exif"
+	"github.com/BrianBland/goexif2/mknote"
 )
 
 func ExampleDecode() {
@@ -80,9 +80,9 @@ func ExampleDecode() {
 
 [License-Url]: https://opensource.org/licenses/BSD-2-Clause
 [License-Image]: https://img.shields.io/badge/license-2%20Clause%20BSD-blue.svg?maxAge=2592000
-[Build-Status-Url]: http://travis-ci.org/xor-gate/goexif2
-[Build-Status-Image]: https://travis-ci.org/xor-gate/goexif2.svg?branch=master
-[Godoc-Url]: https://godoc.org/github.com/xor-gate/goexif2
-[Godoc-Image]: https://godoc.org/github.com/xor-gate/goexif2?status.svg
-[ReportCard-Url]: https://goreportcard.com/report/github.com/xor-gate/goexif2
-[ReportCard-Image]: https://goreportcard.com/badge/github.com/xor-gate/goexif2
+[Build-Status-Url]: http://travis-ci.org/BrianBland/goexif2
+[Build-Status-Image]: https://travis-ci.org/BrianBland/goexif2.svg?branch=master
+[Godoc-Url]: https://godoc.org/github.com/BrianBland/goexif2
+[Godoc-Image]: https://godoc.org/github.com/BrianBland/goexif2?status.svg
+[ReportCard-Url]: https://goreportcard.com/report/github.com/BrianBland/goexif2
+[ReportCard-Image]: https://goreportcard.com/badge/github.com/BrianBland/goexif2
