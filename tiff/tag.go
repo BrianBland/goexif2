@@ -114,7 +114,7 @@ type Tag struct {
 // first read from r should be the first byte of the tag. ReadAt offsets should
 // generally be relative to the beginning of the tiff structure (not relative
 // to the beginning of the tag).
-func DecodeTag(r ReadAtReader, order binary.ByteOrder) (*Tag, error) {
+func DecodeTag(r io.ReadSeeker, order binary.ByteOrder) (*Tag, error) {
 	t := new(Tag)
 	t.order = order
 
@@ -150,14 +150,24 @@ func DecodeTag(r ReadAtReader, order binary.ByteOrder) (*Tag, error) {
 		// Use a bytes.Buffer so we don't allocate a huge slice if the tag
 		// is corrupt.
 		var buff bytes.Buffer
-		sr := io.NewSectionReader(r, int64(t.ValOffset), int64(valLen))
-		n, err := io.Copy(&buff, sr)
+		curr, err := r.Seek(0, 1)
+		if err != nil {
+			return t, errors.New("tiff: seek failed " + err.Error())
+		}
+		n, err := r.Seek(int64(t.ValOffset), 0)
+		if err != nil {
+			return t, errors.New("tiff: tag value read failed: " + err.Error())
+		} else if n != int64(t.ValOffset) {
+			return t, errors.New("tiff: tag value read failed: " + err.Error())
+		}
+		n, err = io.CopyN(&buff, r, int64(valLen))
 		if err != nil {
 			return t, errors.New("tiff: tag value read failed: " + err.Error())
 		} else if n != int64(valLen) {
 			return t, ErrShortReadTagValue
 		}
 		t.Val = buff.Bytes()
+		r.Seek(curr, 0)
 
 	} else {
 		val := make([]byte, valLen)
@@ -324,7 +334,7 @@ func (t *Tag) typeErr(to Format) error {
 }
 
 // Rat returns the tag's i'th value as a rational number. It returns a nil and
-// an error if this tag's Format is not RatVal or has a zero denominator.  It 
+// an error if this tag's Format is not RatVal or has a zero denominator.  It
 // panics i is out of range.
 func (t *Tag) Rat(i int) (*big.Rat, error) {
 	n, d, err := t.Rat2(i)

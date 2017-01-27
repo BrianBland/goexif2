@@ -46,7 +46,7 @@ func IsShortReadTagValueError(err error) bool {
 	return false
 }
 
-var flashDescriptions = map[int]string {
+var flashDescriptions = map[int]string{
 	0x0:  "No Flash",
 	0x1:  "Fired",
 	0x5:  "Fired, Return not detected",
@@ -205,8 +205,6 @@ func (p *parser) Parse(x *Exif) error {
 }
 
 func loadSubDir(x *Exif, ptr FieldName, fieldMap map[uint16]FieldName) error {
-	r := bytes.NewReader(x.Raw)
-
 	tag, err := x.Get(ptr)
 	if err != nil {
 		return nil
@@ -216,11 +214,11 @@ func loadSubDir(x *Exif, ptr FieldName, fieldMap map[uint16]FieldName) error {
 		return nil
 	}
 
-	_, err = r.Seek(offset, 0)
+	_, err = x.rs.Seek(offset, 0)
 	if err != nil {
 		return fmt.Errorf("exif: seek to sub-IFD %s failed: %v", ptr, err)
 	}
-	subDir, _, err := tiff.DecodeDir(r, x.Tiff.Order)
+	subDir, _, err := tiff.DecodeDir(x.rs, x.Tiff.Order)
 	if err != nil {
 		return fmt.Errorf("exif: sub-IFD %s decode failed: %v", ptr, err)
 	}
@@ -230,9 +228,9 @@ func loadSubDir(x *Exif, ptr FieldName, fieldMap map[uint16]FieldName) error {
 
 // Exif provides access to decoded EXIF metadata fields and values.
 type Exif struct {
-	Tiff    *tiff.Tiff
-	main    map[FieldName]*tiff.Tag
-	Raw     []byte
+	Tiff *tiff.Tiff
+	main map[FieldName]*tiff.Tag
+	rs   io.ReadSeeker
 	// Contents of the JPEG COM segment (Comment).
 	Comment string
 }
@@ -252,7 +250,7 @@ func Decode(r io.Reader) (*Exif, error) {
 	// marker and also the EXIF header.
 
 	header := make([]byte, 4)
-	n, err := io.ReadFull(r, header)
+	n, err := r.Read(header)
 	if err != nil {
 		return nil, err
 	}
@@ -272,23 +270,27 @@ func Decode(r io.Reader) (*Exif, error) {
 		// Not TIFF, assume JPEG
 	}
 
-	// Put the header bytes back into the reader.
-	r = io.MultiReader(bytes.NewReader(header), r)
 	var (
-		er  *bytes.Reader
-		tif *tiff.Tiff
+		rs      io.ReadSeeker
+		tif     *tiff.Tiff
+		comment string
 	)
 
-	var comment string
 	if isTiff {
-		// Functions below need the IFDs from the TIFF data to be stored in a
-		// *bytes.Reader.  We use TeeReader to get a copy of the bytes as a
-		// side-effect of tiff.Decode() doing its work.
-		b := &bytes.Buffer{}
-		tr := io.TeeReader(r, b)
-		tif, err = tiff.Decode(tr)
-		er = bytes.NewReader(b.Bytes())
+		if readSeeker, ok := r.(io.ReadSeeker); ok {
+			rs = readSeeker
+			rs.Seek(0, 0)
+		} else {
+			body, err := ioutil.ReadAll(r)
+			if err != nil {
+				return nil, err
+			}
+			rs = bytes.NewReader(append(header, body...))
+		}
 	} else {
+		// Put the header bytes back into the reader.
+		r = io.MultiReader(bytes.NewReader(header), r)
+
 		// Locate the JPEG APP1 header.
 		var sec *appSec
 		sec, err = newAppSec(jpeg_APP1, r)
@@ -301,19 +303,13 @@ func Decode(r io.Reader) (*Exif, error) {
 			comment = string(desc.data)
 		}
 		// Strip away EXIF header.
-		er, err = sec.exifReader()
+		rs, err = sec.exifReader()
 		if err != nil {
 			return nil, err
 		}
-		tif, err = tiff.Decode(er)
 	}
 
-	if err != nil {
-		return nil, decodeError{cause: err}
-	}
-
-	er.Seek(0, 0)
-	raw, err := ioutil.ReadAll(er)
+	tif, err = tiff.Decode(rs)
 	if err != nil {
 		return nil, decodeError{cause: err}
 	}
@@ -322,7 +318,7 @@ func Decode(r io.Reader) (*Exif, error) {
 	x := &Exif{
 		main:    map[FieldName]*tiff.Tag{},
 		Tiff:    tif,
-		Raw:     raw,
+		rs:      rs,
 		Comment: comment,
 	}
 
@@ -585,30 +581,6 @@ func (x *Exif) String() string {
 		fmt.Fprintf(&buf, "%s: %s\n", name, tag)
 	}
 	return buf.String()
-}
-
-// JpegThumbnail returns the jpeg thumbnail if it exists. If it doesn't exist,
-// TagNotPresentError will be returned
-func (x *Exif) JpegThumbnail() ([]byte, error) {
-	offset, err := x.Get(ThumbJPEGInterchangeFormat)
-	if err != nil {
-		return nil, err
-	}
-	start, err := offset.Int(0)
-	if err != nil {
-		return nil, err
-	}
-
-	length, err := x.Get(ThumbJPEGInterchangeFormatLength)
-	if err != nil {
-		return nil, err
-	}
-	l, err := length.Int(0)
-	if err != nil {
-		return nil, err
-	}
-
-	return x.Raw[start : start+l], nil
 }
 
 // MarshalJson implements the encoding/json.Marshaler interface providing output of
